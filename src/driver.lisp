@@ -37,20 +37,23 @@
   (with-package-functions :wookie (request-headers
                                    request-socket
                                    request-method)
-    (let* ((headers (request-headers req))
+    (let* ((headers (let ((table (make-hash-table :test #'equal)))
+                      (alexandria:doplist (k v (if (hash-table-p (request-headers req))
+                                                   (alexandria:hash-table-plist (request-headers req))
+                                                   (request-headers req))
+                                             table)
+                                          (setf (gethash (string-downcase k) table) v))))
            (env #.`(list
                     ,@(mapcan (lambda (name)
                                 (list (intern (format nil "HTTP-~A" name) :keyword)
-                                      `(getf headers ,name)))
+                                      `(gethash ,(string-downcase name) headers)))
                               (list :connection
                                     :host
                                     :origin
                                     :sec-websocket-key
                                     :sec-websocket-version
                                     :upgrade))
-                    :headers (let ((table (make-hash-table :test #'equal)))
-                               (alexandria:doplist (k v headers table)
-                                 (setf (gethash (string-downcase k) table) v)))
+                    :headers headers
                     :request-method (request-method req))))
       (apply #'make-server-for-clack
              env
